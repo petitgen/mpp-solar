@@ -12,6 +12,7 @@ import json
 import glob
 import os
 import usb.core, usb.util, usb.control
+import crc16
 from os import path
 
 from .mppcommand import mppCommand
@@ -263,7 +264,7 @@ class mppInverter:
         while len(cmd)<8:
             cmd = cmd+b'\0'
         log.debug('Command Generated', cmd)
-        time.sleep(0.25)
+        timeout = 100
         # Read from the usb connection
         # try to a max of 100 times
         i=0
