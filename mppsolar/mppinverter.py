@@ -11,6 +11,7 @@ import logging
 import json
 import glob
 import os
+import usb.core, usb.util, usb.control
 from os import path
 
 from .mppcommand import mppCommand
@@ -81,6 +82,12 @@ def isDirectUsbDevice(serial_device):
         return True
     return False
 
+def isDirectUsbDeviceNoDriver():
+    """
+    Determine if this instance is using direct USB connection without Driver
+    """
+    return False
+
 
 class mppInverter:
     """
@@ -96,6 +103,7 @@ class mppInverter:
         self._serial_number = None
         self._test_device = isTestDevice(serial_device)
         self._direct_usb = isDirectUsbDevice(serial_device)
+        self._direct_usb_no_driver = isDirectUsbDeviceNoDriver()
         self._commands = getCommandsFromJson()
         # TODO: text descrption of inverter? version numbers?
 
@@ -226,6 +234,54 @@ class mppInverter:
         command.setResponse(response_line)
         return command
 
+    def _doDirectUsbNoDriverCommand(self, command):
+        """
+        Opens direct USB connection, sends command (multiple times if needed)
+        and returns the response
+        """
+        command.clearResponse()
+        response_line = ""
+        try:
+            vendorId = 0x0665
+            productId = 0x5161
+            interface = 0
+            dev = usb.core.find(idVendor=vendorId, idProduct=productId)
+            if dev.is_kernel_driver_active(interface):
+                dev.detach_kernel_driver(interface)
+                log.debug('Active')
+            dev.set_interface_altsetting(0,0)
+
+        except Exception as e:
+            log.debug('USB open error', e.strerror)
+            return command
+        # Send the command to the open usb connection
+        to_send = command.full_command
+        cmd = to_send.encode('utf-8')
+        crc = crc16.crc16xmodem(cmd).to_bytes(2,'big')
+        cmd = cmd+crc
+        cmd = cmd+b'\r'
+        while len(cmd)<8:
+            cmd = cmd+b'\0'
+        log.debug('Command Generated', cmd)
+        time.sleep(0.25)
+        # Read from the usb connection
+        # try to a max of 100 times
+        i=0
+        while '\r' not in response_line and i<20:
+            try:
+                response_line+="".join([chr(i) for i in dev.read(0x81, 8, timeout * 1) if i!=0x00])
+            except usb.core.USBError as e:
+                if e.errno == 110:
+                    log.debug('Busy ', e.strerror)
+                    pass
+                else:
+                    log.debug('USB read error', e.strerror)
+                    raise
+            i+=1
+        log.debug('usb response was: %s', response_line)
+        command.setResponse(response_line)
+        return command
+
     def execute(self, cmd):
         """
         Sends a command (as supplied) to inverter and returns the raw response
@@ -237,6 +293,9 @@ class mppInverter:
         elif (self._test_device):
             log.debug('TEST connection: executing %s', command)
             return self._doTestCommand(command)
+        elif (self._direct_usb_no_driver):
+            log.debug('USB no driver connection: executing %s', command)
+            return self._doDirectUsbNoDriverCommand(command)
         elif (self._direct_usb):
             log.debug('DIRECT USB connection: executing %s', command)
             return self._doDirectUsbCommand(command)
