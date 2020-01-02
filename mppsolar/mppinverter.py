@@ -87,7 +87,7 @@ def isDirectUsbDeviceNoDriver():
     """
     Determine if this instance is using direct USB connection without Driver
     """
-    return False
+    return True
 
 
 class mppInverter:
