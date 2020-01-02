@@ -1,0 +1,3 @@
+import mppsolar
+
+mppsolar.main()
