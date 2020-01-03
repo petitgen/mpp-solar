@@ -268,6 +268,8 @@ class mppInverter:
         # Read from the usb connection
         # try to a max of 100 times
         i=0
+        log.debug('Send Command')
+        dev.ctrl_transfer(0x21, 0x9, 0x200, 0, cmd)
         while '\r' not in response_line and i<20:
             try:
                 response_line+="".join([chr(i) for i in dev.read(0x81, 8, timeout * 1) if i!=0x00])
