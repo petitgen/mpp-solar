@@ -20,9 +20,15 @@ class Status(Resource):
     data = mp.getResponseDict("Q1")
     data.update(mp.getResponseDict("QPIGS"))
     status = {}
-    for item in data.keys():
+    for key in data.keys():
+      if isinstance(data[key][0], str):
+        if '.' in data[key][0]:
+          status[key] = float(data[key][0])
+        else:
+          status[key] = int(data[key][0])
+      else:
         status[key] = data[key][0]
-    return data
+    return jsonify(status)
 
 api.add_resource(Status, '/status') # Route_1
 
